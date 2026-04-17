@@ -178,3 +178,38 @@
   min-height: 2.5em;
   background: var(--background-primary-alt);
 }
+
+/* --- Download modal --- */
+.im2tex-download-modal .modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.im2tex-download-desc {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.im2tex-download-msg {
+  font-size: 0.85rem;
+  color: var(--text-normal);
+  margin: 0;
+  min-height: 1.2em;
+}
+
+.im2tex-bar-wrap {
+  height: 6px;
+  background: var(--background-modifier-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.im2tex-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--interactive-accent);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}

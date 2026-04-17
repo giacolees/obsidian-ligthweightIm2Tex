@@ -1,6 +1,7 @@
 import {
   App,
   ItemView,
+  Modal,
   Plugin,
   PluginSettingTab,
   Setting,
@@ -18,6 +19,7 @@ import {
 
 const VIEW_TYPE = "im2tex-sidebar";
 const MODEL_ID = "alephpi/FormulaNet";
+const TARGET_SIZE = 384;
 
 // UniMERNet normalisation constants (must match training)
 const NORM_MEAN = 0.7931;
@@ -38,11 +40,84 @@ const DEFAULT_SETTINGS: Im2TexSettings = {
 };
 
 // ---------------------------------------------------------------------------
-// Model singleton
+// Model singleton — loaded atomically so _model/_tokenizer are never mismatched
 // ---------------------------------------------------------------------------
 
 let _model: VisionEncoderDecoderModel | null = null;
 let _tokenizer: PreTrainedTokenizer | null = null;
+let _loadingPromise: Promise<void> | null = null;
+
+async function ensureModel(
+  modelId: string,
+  onProgress: (msg: string, pct?: number) => void
+): Promise<void> {
+  if (_model && _tokenizer) return;
+
+  if (!_loadingPromise) {
+    _loadingPromise = (async () => {
+      const model = await VisionEncoderDecoderModel.from_pretrained(modelId, {
+        dtype: "fp32",
+        progress_callback: (info: ProgressInfo) => {
+          const { msg, pct } = parseProgress(info);
+          onProgress(msg, pct);
+        },
+      });
+      const tokenizer = await PreTrainedTokenizer.from_pretrained(modelId);
+      // assign both only after both succeed
+      _model = model;
+      _tokenizer = tokenizer;
+    })();
+
+    // on failure reset so the user can retry
+    _loadingPromise.catch(() => { _loadingPromise = null; });
+  }
+
+  await _loadingPromise;
+}
+
+function parseProgress(info: ProgressInfo): { msg: string; pct?: number } {
+  if (info.status === "progress") {
+    const i = info as unknown as { loaded: number; total: number; file?: string };
+    const pct = i.total ? Math.round((i.loaded / i.total) * 100) : undefined;
+    return { msg: `Downloading${i.file ? ` ${i.file}` : ""}…`, pct };
+  }
+  if (info.status === "initiate" || info.status === "download") return { msg: "Downloading model…" };
+  if (info.status === "done") return { msg: "Loading weights…" };
+  return { msg: "Initialising…" };
+}
+
+// ---------------------------------------------------------------------------
+// Download modal
+// ---------------------------------------------------------------------------
+
+class ModelDownloadModal extends Modal {
+  private msgEl!: HTMLParagraphElement;
+  private barEl!: HTMLDivElement;
+
+  constructor(app: App) {
+    super(app);
+    this.modalEl.addClass("im2tex-download-modal");
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
+    contentEl.createEl("p", {
+      text: "This only happens once. The model (~100 MB) will be cached locally.",
+      cls: "im2tex-download-desc",
+    });
+    this.msgEl = contentEl.createEl("p", { text: "Starting…", cls: "im2tex-download-msg" });
+    const wrap = contentEl.createDiv({ cls: "im2tex-bar-wrap" });
+    this.barEl = wrap.createDiv({ cls: "im2tex-bar" });
+  }
+
+  onClose() { this.contentEl.empty(); }
+
+  update(msg: string, pct?: number) {
+    this.msgEl.setText(msg);
+    if (pct !== undefined) this.barEl.style.width = `${pct}%`;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Image preprocessing  (mirrors Texo-web imageProcessor.ts, canvas-only)
@@ -59,34 +134,30 @@ async function preprocessDataUrl(dataUrl: string): Promise<Float32Array> {
     const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
   });
 
-  // Draw onto a canvas to get RGBA pixels
-  const oc = makeCanvas(img.width, img.height);
+  const w = img.width, h = img.height;
+  const oc = makeCanvas(w, h);
   const ctx = oc.getContext("2d")!;
   ctx.fillStyle = "white";
-  ctx.fillRect(0, 0, oc.width, oc.height);
+  ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0);
-  const rgba = ctx.getImageData(0, 0, oc.width, oc.height).data;
+  const rgba = ctx.getImageData(0, 0, w, h).data;
 
   // Greyscale (luminance)
-  const w = oc.width;
-  const h = oc.height;
   const grey = new Uint8Array(w * h);
   for (let i = 0; i < grey.length; i++) {
-    const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
-    grey[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+    grey[i] = Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
   }
 
-  // Auto-invert: if dark pixels >= light pixels it's white-on-black
+  // Auto-invert: white-on-black → black-on-white
   const histogram = new Uint32Array(256);
   for (const v of grey) histogram[v]++;
   const darkPx = histogram.slice(0, 200).reduce((s, v) => s + v, 0);
   const lightPx = histogram.slice(200).reduce((s, v) => s + v, 0);
   if (darkPx >= lightPx) for (let i = 0; i < grey.length; i++) grey[i] = 255 - grey[i];
 
-  // Crop margins: find bounding box of pixels < threshold
+  // Crop margins
   const threshold = 200;
-  let minX = w, minY = h, maxX = 0, maxY = 0;
-  let hasContent = false;
+  let minX = w, minY = h, maxX = 0, maxY = 0, hasContent = false;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (grey[y * w + x] < threshold) {
@@ -103,82 +174,56 @@ async function preprocessDataUrl(dataUrl: string): Promise<Float32Array> {
   const cropW = maxX - minX + 1;
   const cropH = maxY - minY + 1;
 
-  // Resize to 384×384 preserving aspect ratio, centre-pad with white (0)
-  const TARGET = 384;
-  const scale = Math.min(TARGET / cropW, TARGET / cropH);
-  const newW = Math.round(cropW * scale);
-  const newH = Math.round(cropH * scale);
-  const padX = Math.floor((TARGET - newW) / 2);
-  const padY = Math.floor((TARGET - newH) / 2);
-
-  // Draw crop → resize canvas
-  const rc = makeCanvas(TARGET, TARGET);
-  const rctx = rc.getContext("2d")!;
-  rctx.fillStyle = "white";
-  rctx.fillRect(0, 0, TARGET, TARGET);
-
-  const cc = makeCanvas(cropW, cropH);
-  const cctx = cc.getContext("2d")!;
+  // Build crop ImageData directly (avoid slow pixel-by-pixel fillRect)
+  const cropData = new ImageData(cropW, cropH);
   for (let y = 0; y < cropH; y++) {
     for (let x = 0; x < cropW; x++) {
       const v = grey[(y + minY) * w + (x + minX)];
-      cctx.fillStyle = `rgb(${v},${v},${v})`;
-      cctx.fillRect(x, y, 1, 1);
+      const idx = (y * cropW + x) * 4;
+      cropData.data[idx] = v;
+      cropData.data[idx + 1] = v;
+      cropData.data[idx + 2] = v;
+      cropData.data[idx + 3] = 255;
     }
   }
+  const cc = makeCanvas(cropW, cropH);
+  cc.getContext("2d")!.putImageData(cropData, 0, 0);
+
+  // Resize to 384×384 preserving aspect ratio, centre-pad with white
+  const scale = Math.min(TARGET_SIZE / cropW, TARGET_SIZE / cropH);
+  const newW = Math.round(cropW * scale);
+  const newH = Math.round(cropH * scale);
+  const padX = Math.floor((TARGET_SIZE - newW) / 2);
+  const padY = Math.floor((TARGET_SIZE - newH) / 2);
+
+  const rc = makeCanvas(TARGET_SIZE, TARGET_SIZE);
+  const rctx = rc.getContext("2d")!;
+  rctx.fillStyle = "white";
+  rctx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
   rctx.drawImage(cc, padX, padY, newW, newH);
 
-  const outRgba = rctx.getImageData(0, 0, TARGET, TARGET).data;
-  const result = new Float32Array(TARGET * TARGET);
-  for (let i = 0; i < TARGET * TARGET; i++) {
-    const v = outRgba[i * 4]; // R channel (greyscale)
-    result[i] = (v / 255 - NORM_MEAN) / NORM_STD;
+  const outRgba = rctx.getImageData(0, 0, TARGET_SIZE, TARGET_SIZE).data;
+  const result = new Float32Array(TARGET_SIZE * TARGET_SIZE);
+  for (let i = 0; i < result.length; i++) {
+    result[i] = (outRgba[i * 4] / 255 - NORM_MEAN) / NORM_STD;
   }
   return result;
 }
 
-function formatProgress(info: ProgressInfo): string {
-  if (info.status === "progress") {
-    const pct = "total" in info && info.total ? Math.round(((info as { loaded: number; total: number }).loaded / (info as { loaded: number; total: number }).total) * 100) : 0;
-    return `Downloading model… ${pct}%`;
-  }
-  if (info.status === "initiate" || info.status === "download") return "Downloading model…";
-  if (info.status === "done") return "Loading model…";
-  return "Initialising…";
-}
-
 // ---------------------------------------------------------------------------
-// Inference
+// Inference (assumes model already loaded via ensureModel)
 // ---------------------------------------------------------------------------
 
-async function runInference(
-  dataUrl: string,
-  modelId: string,
-  onProgress: (msg: string) => void
-): Promise<string> {
-  if (!_model) {
-    onProgress("Downloading model…");
-    _model = await VisionEncoderDecoderModel.from_pretrained(modelId, {
-      dtype: "fp32",
-      progress_callback: (info: ProgressInfo) => onProgress(formatProgress(info)),
-    });
-    _tokenizer = await PreTrainedTokenizer.from_pretrained(modelId);
-  }
-
-  onProgress("Preprocessing…");
+async function runInference(dataUrl: string): Promise<string> {
   const array = await preprocessDataUrl(dataUrl);
   const t = new Tensor("float32", array, [1, 1, TARGET_SIZE, TARGET_SIZE]);
   const pixel_values = cat([t, t, t], 1);
-
-  onProgress("Running inference…");
-  const outputs = await _model.generate({ inputs: pixel_values });
+  const outputs = await _model!.generate({ inputs: pixel_values });
   const tok = _tokenizer!;
   return (tok.batch_decode(outputs as Parameters<typeof tok.batch_decode>[0], {
     skip_special_tokens: true,
   }) as string[])[0];
 }
-
-const TARGET_SIZE = 384;
 
 // ---------------------------------------------------------------------------
 // Sidebar View
@@ -230,18 +275,13 @@ class Im2TexView extends ItemView {
     header.createEl("h4", { text: "Im2Tex" });
     this.statusEl = header.createEl("span", { cls: "im2tex-status" });
 
-    // Drop zone
     this.dropZone = root.createDiv({ cls: "im2tex-dropzone" });
-    this.dropZone.createEl("p", {
-      text: "Drop or paste an image here",
-      cls: "im2tex-dropzone-hint",
-    });
+    this.dropZone.createEl("p", { text: "Drop or paste an image here", cls: "im2tex-dropzone-hint" });
 
     const browseBtn = this.dropZone.createEl("button", {
       text: "Browse file…",
       cls: "im2tex-btn im2tex-btn--primary im2tex-browse-btn",
     });
-
     const fileInput = this.dropZone.createEl("input") as HTMLInputElement;
     fileInput.type = "file";
     fileInput.accept = "image/*";
@@ -266,23 +306,18 @@ class Im2TexView extends ItemView {
       const file = e.dataTransfer?.files[0];
       if (file && file.type.startsWith("image/")) this.loadFile(file);
     });
-
     root.addEventListener("paste", (e) => {
-      const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
-        i.type.startsWith("image/")
-      );
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
       if (item) { const f = item.getAsFile(); if (f) this.loadFile(f); }
     });
     root.setAttribute("tabindex", "0");
 
-    // Canvas
     this.canvasContainer = root.createDiv({ cls: "im2tex-canvas-container" });
     this.canvasContainer.style.display = "none";
     this.canvas = this.canvasContainer.createEl("canvas", { cls: "im2tex-canvas" });
     this.overlayCanvas = this.canvasContainer.createEl("canvas", { cls: "im2tex-overlay" });
     this.attachSelectionListeners();
 
-    // Buttons
     const btnRow = root.createDiv({ cls: "im2tex-btn-row" });
     this.inferBtn = btnRow.createEl("button", {
       text: "Detect formula",
@@ -293,7 +328,6 @@ class Im2TexView extends ItemView {
     const clearBtn = btnRow.createEl("button", { text: "Clear", cls: "im2tex-btn" });
     clearBtn.addEventListener("click", () => this.clearAll());
 
-    // Result
     this.resultContainer = root.createDiv({ cls: "im2tex-result" });
     this.resultContainer.style.display = "none";
 
@@ -304,7 +338,6 @@ class Im2TexView extends ItemView {
       cls: "im2tex-btn im2tex-btn--sm im2tex-btn--primary",
     });
     copyBtn.addEventListener("click", () => this.copyLatex());
-
     this.latexDisplay = this.resultContainer.createDiv({ cls: "im2tex-latex-display" });
   }
 
@@ -390,8 +423,7 @@ class Im2TexView extends ItemView {
   }
 
   private clearOverlay() {
-    const ctx = this.overlayCanvas.getContext("2d")!;
-    ctx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+    this.overlayCanvas.getContext("2d")!.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
   }
 
   private redrawOverlay() {
@@ -425,12 +457,24 @@ class Im2TexView extends ItemView {
     if (!this.loadedImage) { new Notice("Please load an image first."); return; }
     if (this.busy) return;
     this.setBusy(true);
+
+    const isFirstLoad = !_model || !_tokenizer;
+    const modal = isFirstLoad ? new ModelDownloadModal(this.app) : null;
+    if (modal) modal.open();
+
     try {
-      const dataUrl = this.getCropDataUrl();
-      const latex = await runInference(dataUrl, this.settings.modelId, (msg) => this.setStatus(msg));
+      await ensureModel(this.settings.modelId, (msg, pct) => {
+        modal?.update(msg, pct);
+        this.setStatus(msg);
+      });
+      modal?.close();
+
+      this.setStatus("Preprocessing…");
+      const latex = await runInference(this.getCropDataUrl());
       this.showResult(latex);
       this.setStatus("Done");
     } catch (err: unknown) {
+      modal?.close();
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Im2Tex]", err);
       new Notice(`Im2Tex error: ${msg}`);
@@ -508,6 +552,7 @@ class Im2TexSettingTab extends PluginSettingTab {
             this.plugin.settings.modelId = v || MODEL_ID;
             _model = null;
             _tokenizer = null;
+            _loadingPromise = null;
             await this.plugin.saveSettings();
           })
       );
