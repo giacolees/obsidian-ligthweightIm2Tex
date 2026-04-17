@@ -1,0 +1,52 @@
+// https://biomejs.dev/reference/configuration/
+{
+	"linter": {
+		"rules": {
+			"style": {
+				"useNamingConvention": "on",
+				"useShorthandAssign": "on",
+				"useForOf": "on",
+				"useDefaultSwitchClause": "on",
+				"useConsistentArrayType": "on",
+				"noYodaExpression": "on",
+				"noUselessElse": "on",
+				"noUnusedTemplateLiteral": "on",
+				"noInferrableTypes": "on",
+				"useTemplate": "off"
+			},
+			"suspicious": {
+				"noConsole": {
+					"level": "warn",
+					"options": { "allow": ["error", "warn", "info", "debug"] }
+				},
+				"useErrorMessage": "on",
+				"useAwait": "on",
+				"noVar": "on",
+				"noEmptyBlockStatements": "on"
+			},
+			"complexity": {
+				"useWhile": "on",
+				"noUselessStringConcat": "on"
+			},
+			"correctness": {
+				"noUndeclaredVariables": "on"
+			}
+		}
+	},
+	"javascript": {
+		"globals": ["activeDocument", "activeWindow"]
+	},
+	"formatter": {
+		"lineWidth": 100,
+		"formatWithErrors": true
+	},
+	"files": {
+		"ignoreUnknown": true
+	},
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json"
+}

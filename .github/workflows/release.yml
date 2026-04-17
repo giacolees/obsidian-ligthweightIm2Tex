@@ -5,21 +5,23 @@ on:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
 
-permissions:
-  contents: write
+env:
+  PLUGIN_NAME: ${{ github.event.repository.name }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "current"
           cache: npm
 
-      - run: npm ci
+      - run: npm install
 
       - name: Type-check
         run: npx tsc --noEmit --skipLibCheck
@@ -36,13 +38,41 @@ jobs:
             exit 1
           fi
 
-      - name: Create GitHub Release
+      - name: Package plugin zip
+        run: |
+          mkdir ${{ env.PLUGIN_NAME }}
+          cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
+          zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
+
+      - name: Build release notes
+        id: release_notes
+        uses: mikepenz/release-changelog-builder-action@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          mode: "COMMIT"
+          configurationJson: |
+            {
+              "label_extractor": [{
+                "pattern": "^(\\w+)(\\([\\w\\-\\.]+\\))?(!)?: .+",
+                "on_property": "title",
+                "target": "$1"
+              }],
+              "categories": [
+                { "title": "## Features", "labels": ["feat"] },
+                { "title": "## Fixes", "labels": ["fix"] },
+                { "title": "## Other", "labels": [] }
+              ],
+              "ignore_labels": ["release", "bump"]
+            }
+
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.release_notes.outputs.changelog }}
           files: |
+            ${{ env.PLUGIN_NAME }}.zip
             main.js
             manifest.json
             styles.css
