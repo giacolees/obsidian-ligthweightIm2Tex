@@ -7,36 +7,178 @@ import {
   WorkspaceLeaf,
   Notice,
 } from "obsidian";
+import {
+  VisionEncoderDecoderModel,
+  PreTrainedTokenizer,
+  Tensor,
+  cat,
+  env,
+  type ProgressInfo,
+} from "@huggingface/transformers";
 
 const VIEW_TYPE = "im2tex-sidebar";
+const MODEL_ID = "alephpi/FormulaNet";
+
+// UniMERNet normalisation constants (must match training)
+const NORM_MEAN = 0.7931;
+const NORM_STD = 0.1738;
+
+env.allowLocalModels = false;
 
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
 
 interface Im2TexSettings {
-  apiEndpoint: string;
-  apiKey: string;
+  modelId: string;
 }
 
 const DEFAULT_SETTINGS: Im2TexSettings = {
-  apiEndpoint: "",
-  apiKey: "",
+  modelId: MODEL_ID,
 };
 
 // ---------------------------------------------------------------------------
-// Inference stub — replace with your model call
+// Model singleton
+// ---------------------------------------------------------------------------
+
+let _model: VisionEncoderDecoderModel | null = null;
+let _tokenizer: PreTrainedTokenizer | null = null;
+
+// ---------------------------------------------------------------------------
+// Image preprocessing  (mirrors Texo-web imageProcessor.ts, canvas-only)
+// ---------------------------------------------------------------------------
+
+function makeCanvas(w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  return c;
+}
+
+async function preprocessDataUrl(dataUrl: string): Promise<Float32Array> {
+  const img = await new Promise<HTMLImageElement>((res, rej) => {
+    const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+  });
+
+  // Draw onto a canvas to get RGBA pixels
+  const oc = makeCanvas(img.width, img.height);
+  const ctx = oc.getContext("2d")!;
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, oc.width, oc.height);
+  ctx.drawImage(img, 0, 0);
+  const rgba = ctx.getImageData(0, 0, oc.width, oc.height).data;
+
+  // Greyscale (luminance)
+  const w = oc.width;
+  const h = oc.height;
+  const grey = new Uint8Array(w * h);
+  for (let i = 0; i < grey.length; i++) {
+    const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
+    grey[i] = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+  }
+
+  // Auto-invert: if dark pixels >= light pixels it's white-on-black
+  const histogram = new Uint32Array(256);
+  for (const v of grey) histogram[v]++;
+  const darkPx = histogram.slice(0, 200).reduce((s, v) => s + v, 0);
+  const lightPx = histogram.slice(200).reduce((s, v) => s + v, 0);
+  if (darkPx >= lightPx) for (let i = 0; i < grey.length; i++) grey[i] = 255 - grey[i];
+
+  // Crop margins: find bounding box of pixels < threshold
+  const threshold = 200;
+  let minX = w, minY = h, maxX = 0, maxY = 0;
+  let hasContent = false;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (grey[y * w + x] < threshold) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        hasContent = true;
+      }
+    }
+  }
+  if (!hasContent) { minX = 0; minY = 0; maxX = w - 1; maxY = h - 1; }
+
+  const cropW = maxX - minX + 1;
+  const cropH = maxY - minY + 1;
+
+  // Resize to 384×384 preserving aspect ratio, centre-pad with white (0)
+  const TARGET = 384;
+  const scale = Math.min(TARGET / cropW, TARGET / cropH);
+  const newW = Math.round(cropW * scale);
+  const newH = Math.round(cropH * scale);
+  const padX = Math.floor((TARGET - newW) / 2);
+  const padY = Math.floor((TARGET - newH) / 2);
+
+  // Draw crop → resize canvas
+  const rc = makeCanvas(TARGET, TARGET);
+  const rctx = rc.getContext("2d")!;
+  rctx.fillStyle = "white";
+  rctx.fillRect(0, 0, TARGET, TARGET);
+
+  const cc = makeCanvas(cropW, cropH);
+  const cctx = cc.getContext("2d")!;
+  for (let y = 0; y < cropH; y++) {
+    for (let x = 0; x < cropW; x++) {
+      const v = grey[(y + minY) * w + (x + minX)];
+      cctx.fillStyle = `rgb(${v},${v},${v})`;
+      cctx.fillRect(x, y, 1, 1);
+    }
+  }
+  rctx.drawImage(cc, padX, padY, newW, newH);
+
+  const outRgba = rctx.getImageData(0, 0, TARGET, TARGET).data;
+  const result = new Float32Array(TARGET * TARGET);
+  for (let i = 0; i < TARGET * TARGET; i++) {
+    const v = outRgba[i * 4]; // R channel (greyscale)
+    result[i] = (v / 255 - NORM_MEAN) / NORM_STD;
+  }
+  return result;
+}
+
+function formatProgress(info: ProgressInfo): string {
+  if (info.status === "progress") {
+    const pct = "total" in info && info.total ? Math.round(((info as { loaded: number; total: number }).loaded / (info as { loaded: number; total: number }).total) * 100) : 0;
+    return `Downloading model… ${pct}%`;
+  }
+  if (info.status === "initiate" || info.status === "download") return "Downloading model…";
+  if (info.status === "done") return "Loading model…";
+  return "Initialising…";
+}
+
+// ---------------------------------------------------------------------------
+// Inference
 // ---------------------------------------------------------------------------
 
 async function runInference(
-  _dataUrl: string,
-  _settings: Im2TexSettings
+  dataUrl: string,
+  modelId: string,
+  onProgress: (msg: string) => void
 ): Promise<string> {
-  // TODO: call your model here.
-  // `_dataUrl` is a PNG data-URL: "data:image/png;base64,..."
-  await new Promise((r) => setTimeout(r, 600));
-  return String.raw`\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}`;
+  if (!_model) {
+    onProgress("Downloading model…");
+    _model = await VisionEncoderDecoderModel.from_pretrained(modelId, {
+      dtype: "fp32",
+      progress_callback: (info: ProgressInfo) => onProgress(formatProgress(info)),
+    });
+    _tokenizer = await PreTrainedTokenizer.from_pretrained(modelId);
+  }
+
+  onProgress("Preprocessing…");
+  const array = await preprocessDataUrl(dataUrl);
+  const t = new Tensor("float32", array, [1, 1, TARGET_SIZE, TARGET_SIZE]);
+  const pixel_values = cat([t, t, t], 1);
+
+  onProgress("Running inference…");
+  const outputs = await _model.generate({ inputs: pixel_values });
+  const tok = _tokenizer!;
+  return (tok.batch_decode(outputs as Parameters<typeof tok.batch_decode>[0], {
+    skip_special_tokens: true,
+  }) as string[])[0];
 }
+
+const TARGET_SIZE = 384;
 
 // ---------------------------------------------------------------------------
 // Sidebar View
@@ -285,12 +427,13 @@ class Im2TexView extends ItemView {
     this.setBusy(true);
     try {
       const dataUrl = this.getCropDataUrl();
-      const latex = await runInference(dataUrl, this.settings);
+      const latex = await runInference(dataUrl, this.settings.modelId, (msg) => this.setStatus(msg));
       this.showResult(latex);
       this.setStatus("Done");
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
       console.error("[Im2Tex]", err);
-      new Notice(`Im2Tex error: ${err?.message ?? err}`);
+      new Notice(`Im2Tex error: ${msg}`);
       this.setStatus("Error");
     } finally {
       this.setBusy(false);
@@ -337,7 +480,6 @@ class Im2TexView extends ItemView {
     this.busy = busy;
     this.inferBtn.disabled = busy;
     this.inferBtn.setText(busy ? "Running…" : "Detect formula");
-    if (busy) this.setStatus("Running…");
   }
 
   private setStatus(msg: string) { this.statusEl.setText(msg); }
@@ -357,21 +499,17 @@ class Im2TexSettingTab extends PluginSettingTab {
     containerEl.createEl("h2", { text: "Im2Tex settings" });
 
     new Setting(containerEl)
-      .setName("API endpoint")
-      .setDesc("URL of the inference endpoint (receives base64 PNG, returns LaTeX).")
+      .setName("Model ID")
+      .setDesc("HuggingFace model ID used for inference.")
       .addText((t) =>
-        t.setPlaceholder("https://your-endpoint/predict")
-          .setValue(this.plugin.settings.apiEndpoint)
-          .onChange(async (v) => { this.plugin.settings.apiEndpoint = v; await this.plugin.saveSettings(); })
-      );
-
-    new Setting(containerEl)
-      .setName("API key")
-      .setDesc("Bearer token (leave blank if not required).")
-      .addText((t) =>
-        t.setPlaceholder("sk-…")
-          .setValue(this.plugin.settings.apiKey)
-          .onChange(async (v) => { this.plugin.settings.apiKey = v; await this.plugin.saveSettings(); })
+        t.setPlaceholder(MODEL_ID)
+          .setValue(this.plugin.settings.modelId)
+          .onChange(async (v) => {
+            this.plugin.settings.modelId = v || MODEL_ID;
+            _model = null;
+            _tokenizer = null;
+            await this.plugin.saveSettings();
+          })
       );
   }
 }
