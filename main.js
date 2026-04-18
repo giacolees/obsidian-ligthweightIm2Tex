@@ -35,7 +35,44 @@ __export(main_exports, {
   default: () => Im2TexPlugin
 });
 module.exports = __toCommonJS(main_exports);
+var import_obsidian4 = require("obsidian");
+
+// src/settings.ts
+var MODEL_ID = "alephpi/FormulaNet";
+var DEFAULT_SETTINGS = {
+  modelId: MODEL_ID
+};
+
+// src/view.ts
+var import_obsidian2 = require("obsidian");
+
+// src/modal.ts
 var import_obsidian = require("obsidian");
+var ModelDownloadModal = class extends import_obsidian.Modal {
+  constructor(app) {
+    super(app);
+    this.modalEl.addClass("im2tex-download-modal");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
+    contentEl.createEl("p", {
+      text: "This only happens once. The model (~100 MB) will be cached locally.",
+      cls: "im2tex-download-desc"
+    });
+    this.msgEl = contentEl.createEl("p", { text: "Starting\u2026", cls: "im2tex-download-msg" });
+    const wrap = contentEl.createDiv({ cls: "im2tex-bar-wrap" });
+    this.barEl = wrap.createDiv({ cls: "im2tex-bar" });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+  update(msg, pct) {
+    this.msgEl.setText(msg);
+    if (pct !== void 0)
+      this.barEl.style.width = `${pct}%`;
+  }
+};
 
 // node_modules/@huggingface/transformers/node_modules/onnxruntime-common/dist/esm/index.js
 var esm_exports = {};
@@ -49002,19 +49039,19 @@ var __webpack_exports__window_function = __webpack_exports__.window_function;
 var __webpack_exports__zeros = __webpack_exports__.zeros;
 var __webpack_exports__zeros_like = __webpack_exports__.zeros_like;
 
-// main.ts
-var VIEW_TYPE = "im2tex-sidebar";
-var MODEL_ID = "alephpi/FormulaNet";
+// src/inference.ts
 var TARGET_SIZE = 384;
 var NORM_MEAN = 0.7931;
 var NORM_STD = 0.1738;
 __webpack_exports__env.allowLocalModels = false;
-var DEFAULT_SETTINGS = {
-  modelId: MODEL_ID
-};
 var _model = null;
 var _tokenizer = null;
 var _loadingPromise = null;
+function resetModel() {
+  _model = null;
+  _tokenizer = null;
+  _loadingPromise = null;
+}
 async function ensureModel(modelId, onProgress) {
   if (_model && _tokenizer)
     return;
@@ -49037,6 +49074,9 @@ async function ensureModel(modelId, onProgress) {
   }
   await _loadingPromise;
 }
+function isModelLoaded() {
+  return !!(_model && _tokenizer);
+}
 function parseProgress(info) {
   if (info.status === "progress") {
     const i = info;
@@ -49049,31 +49089,6 @@ function parseProgress(info) {
     return { msg: "Loading weights\u2026" };
   return { msg: "Initialising\u2026" };
 }
-var ModelDownloadModal = class extends import_obsidian.Modal {
-  constructor(app) {
-    super(app);
-    this.modalEl.addClass("im2tex-download-modal");
-  }
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
-    contentEl.createEl("p", {
-      text: "This only happens once. The model (~100 MB) will be cached locally.",
-      cls: "im2tex-download-desc"
-    });
-    this.msgEl = contentEl.createEl("p", { text: "Starting\u2026", cls: "im2tex-download-msg" });
-    const wrap = contentEl.createDiv({ cls: "im2tex-bar-wrap" });
-    this.barEl = wrap.createDiv({ cls: "im2tex-bar" });
-  }
-  onClose() {
-    this.contentEl.empty();
-  }
-  update(msg, pct) {
-    this.msgEl.setText(msg);
-    if (pct !== void 0)
-      this.barEl.style.width = `${pct}%`;
-  }
-};
 function makeCanvas(w, h) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -49172,7 +49187,10 @@ async function runInference(dataUrl) {
   })[0];
   return raw.replace(/\\!/g, "");
 }
-var Im2TexView = class extends import_obsidian.ItemView {
+
+// src/view.ts
+var VIEW_TYPE = "im2tex-sidebar";
+var Im2TexView = class extends import_obsidian2.ItemView {
   constructor(leaf, settings) {
     super(leaf);
     this.loadedImage = null;
@@ -49200,9 +49218,9 @@ var Im2TexView = class extends import_obsidian.ItemView {
   }
   async onClose() {
   }
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // UI
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   buildUI(root) {
     const header = root.createDiv({ cls: "im2tex-header" });
     header.createEl("h4", { text: "Im2Tex" });
@@ -49274,9 +49292,9 @@ var Im2TexView = class extends import_obsidian.ItemView {
     copyBtn.addEventListener("click", () => this.copyLatex());
     this.latexDisplay = this.resultContainer.createDiv({ cls: "im2tex-latex-display" });
   }
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Image loading
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   loadFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => this.loadImageSrc(e.target?.result);
@@ -49309,9 +49327,9 @@ var Im2TexView = class extends import_obsidian.ItemView {
     this.canvas.getContext("2d").drawImage(this.loadedImage, 0, 0, w, h);
     this.clearOverlay();
   }
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Rectangle selection
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   attachSelectionListeners() {
     this.overlayCanvas.addEventListener("mousedown", (e) => {
       const { x, y } = this.canvasPos(e);
@@ -49387,19 +49405,18 @@ var Im2TexView = class extends import_obsidian.ItemView {
       ctx.fillRect(cx - hs2 / 2, cy - hs2 / 2, hs2, hs2);
     }
   }
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Inference
-  // -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   async handleInfer() {
     if (!this.loadedImage) {
-      new import_obsidian.Notice("Please load an image first.");
+      new import_obsidian2.Notice("Please load an image first.");
       return;
     }
     if (this.busy)
       return;
     this.setBusy(true);
-    const isFirstLoad = !_model || !_tokenizer;
-    const modal = isFirstLoad ? new ModelDownloadModal(this.app) : null;
+    const modal = !isModelLoaded() ? new ModelDownloadModal(this.app) : null;
     if (modal)
       modal.open();
     try {
@@ -49416,7 +49433,7 @@ var Im2TexView = class extends import_obsidian.ItemView {
       modal?.close();
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Im2Tex]", err);
-      new import_obsidian.Notice(`Im2Tex error: ${msg}`);
+      new import_obsidian2.Notice(`Im2Tex error: ${msg}`);
       this.setStatus("Error");
     } finally {
       this.setBusy(false);
@@ -49443,7 +49460,7 @@ var Im2TexView = class extends import_obsidian.ItemView {
     this.resultContainer.scrollIntoView({ behavior: "smooth" });
   }
   copyLatex() {
-    navigator.clipboard.writeText(this.latexDisplay.getText()).then(() => new import_obsidian.Notice("Copied!"));
+    navigator.clipboard.writeText(this.latexDisplay.getText()).then(() => new import_obsidian2.Notice("Copied!"));
   }
   clearAll() {
     this.loadedImage = null;
@@ -49462,7 +49479,10 @@ var Im2TexView = class extends import_obsidian.ItemView {
     this.statusEl.setText(msg);
   }
 };
-var Im2TexSettingTab = class extends import_obsidian.PluginSettingTab {
+
+// src/settingsTab.ts
+var import_obsidian3 = require("obsidian");
+var Im2TexSettingTab = class extends import_obsidian3.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -49471,18 +49491,18 @@ var Im2TexSettingTab = class extends import_obsidian.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "Im2Tex settings" });
-    new import_obsidian.Setting(containerEl).setName("Model ID").setDesc("HuggingFace model ID used for inference.").addText(
+    new import_obsidian3.Setting(containerEl).setName("Model ID").setDesc("HuggingFace model ID used for inference.").addText(
       (t) => t.setPlaceholder(MODEL_ID).setValue(this.plugin.settings.modelId).onChange(async (v) => {
         this.plugin.settings.modelId = v || MODEL_ID;
-        _model = null;
-        _tokenizer = null;
-        _loadingPromise = null;
+        resetModel();
         await this.plugin.saveSettings();
       })
     );
   }
 };
-var Im2TexPlugin = class extends import_obsidian.Plugin {
+
+// main.ts
+var Im2TexPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(VIEW_TYPE, (leaf) => new Im2TexView(leaf, this.settings));
