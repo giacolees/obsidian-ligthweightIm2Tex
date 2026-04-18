@@ -1,215 +1,218 @@
 /* ===== Im2Tex Sidebar Plugin ===== */
 
 .im2tex-root {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  height: 100%;
-  overflow-y: auto;
-  box-sizing: border-box;
-  outline: none; /* suppress focus ring on the container */
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px;
+	height: 100%;
+	overflow-y: auto;
+	box-sizing: border-box;
+	outline: none; /* suppress focus ring on the container */
 }
 
 /* --- Header --- */
 .im2tex-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 }
 
 .im2tex-header h4 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
+	margin: 0;
+	font-size: 1rem;
+	font-weight: 600;
 }
 
 .im2tex-status {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  font-style: italic;
-  min-height: 1em;
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	font-style: italic;
+	min-height: 1em;
 }
 
 /* --- Progress bar --- */
 .im2tex-progress {
-  display: none;
-  height: 4px;
-  background: var(--background-modifier-border);
-  border-radius: 2px;
-  overflow: hidden;
+	display: none;
+	height: 4px;
+	background: var(--background-modifier-border);
+	border-radius: 2px;
+	overflow: hidden;
 }
 
 .im2tex-progress-fill {
-  height: 100%;
-  background: var(--interactive-accent);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+	height: 100%;
+	background: var(--interactive-accent);
+	border-radius: 2px;
+	transition: width 0.3s ease;
 }
 
 /* --- Drop zone --- */
 .im2tex-dropzone {
-  border: 2px dashed var(--background-modifier-border);
-  border-radius: 8px;
-  padding: 32px 16px;
-  text-align: center;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-  background: var(--background-secondary);
+	border: 2px dashed var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 32px 16px;
+	text-align: center;
+	cursor: pointer;
+	transition:
+		border-color 0.15s,
+		background 0.15s;
+	background: var(--background-secondary);
 }
 
 .im2tex-dropzone:hover,
 .im2tex-dropzone--active {
-  border-color: var(--interactive-accent);
-  background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+	background: var(--background-modifier-hover);
 }
 
 .im2tex-dropzone-hint {
-  margin: 0 0 10px;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-  pointer-events: none;
+	margin: 0 0 10px;
+	color: var(--text-muted);
+	font-size: 0.85rem;
+	pointer-events: none;
 }
 
 .im2tex-browse-btn {
-  flex: unset;
-  width: auto;
-  padding: 5px 14px;
-  font-size: 0.83rem;
+	flex: unset;
+	width: auto;
+	padding: 5px 14px;
+	font-size: 0.83rem;
 }
 
 /* --- Canvas container --- */
 .im2tex-canvas-container {
-  position: relative;
-  width: 100%;
-  border-radius: 6px;
-  overflow: hidden;
-  background: #000;
-  user-select: none;
+	position: relative;
+	width: 100%;
+	border-radius: 6px;
+	overflow: hidden;
+	background: #000;
+	user-select: none;
 }
 
 .im2tex-canvas,
 .im2tex-overlay {
-  display: block;
-  width: 100%;
-  height: auto;
+	display: block;
+	width: 100%;
+	height: auto;
 }
 
 .im2tex-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  cursor: crosshair;
+	position: absolute;
+	top: 0;
+	left: 0;
+	cursor: crosshair;
+	touch-action: none;
 }
 
 /* --- Button row --- */
 .im2tex-btn-row {
-  display: flex;
-  gap: 8px;
+	display: flex;
+	gap: 8px;
 }
 
 .im2tex-btn {
-  flex: 1;
-  padding: 6px 12px;
-  border-radius: 5px;
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
-  color: var(--text-normal);
-  cursor: pointer;
-  font-size: 0.85rem;
-  transition: background 0.12s;
+	flex: 1;
+	padding: 6px 12px;
+	border-radius: 5px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	cursor: pointer;
+	font-size: 0.85rem;
+	transition: background 0.12s;
 }
 
 .im2tex-btn:hover {
-  background: var(--background-modifier-hover);
+	background: var(--background-modifier-hover);
 }
 
 .im2tex-btn--primary {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
 }
 
 .im2tex-btn--primary:hover {
-  background: var(--interactive-accent-hover);
-  border-color: var(--interactive-accent-hover);
+	background: var(--interactive-accent-hover);
+	border-color: var(--interactive-accent-hover);
 }
 
 .im2tex-btn--sm {
-  flex: unset;
-  padding: 3px 8px;
-  font-size: 0.78rem;
+	flex: unset;
+	padding: 3px 8px;
+	font-size: 0.78rem;
 }
 
 /* --- Result area --- */
 .im2tex-result {
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	overflow: hidden;
+	background: var(--background-secondary);
 }
 
 .im2tex-result-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--background-modifier-border);
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 6px 10px;
+	background: var(--background-modifier-border);
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 .im2tex-result-actions {
-  display: flex;
-  gap: 6px;
+	display: flex;
+	gap: 6px;
 }
 
 .im2tex-latex-display {
-  padding: 10px 12px;
-  font-family: var(--font-monospace);
-  font-size: 0.88rem;
-  color: var(--text-normal);
-  white-space: pre-wrap;
-  word-break: break-all;
-  min-height: 2.5em;
-  background: var(--background-primary-alt);
+	padding: 10px 12px;
+	font-family: var(--font-monospace);
+	font-size: 0.88rem;
+	color: var(--text-normal);
+	white-space: pre-wrap;
+	word-break: break-all;
+	min-height: 2.5em;
+	background: var(--background-primary-alt);
 }
 
 /* --- Download modal --- */
 .im2tex-download-modal .modal-content {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
 }
 
 .im2tex-download-desc {
-  color: var(--text-muted);
-  font-size: 0.88rem;
-  margin: 0;
+	color: var(--text-muted);
+	font-size: 0.88rem;
+	margin: 0;
 }
 
 .im2tex-download-msg {
-  font-size: 0.85rem;
-  color: var(--text-normal);
-  margin: 0;
-  min-height: 1.2em;
+	font-size: 0.85rem;
+	color: var(--text-normal);
+	margin: 0;
+	min-height: 1.2em;
 }
 
 .im2tex-bar-wrap {
-  height: 6px;
-  background: var(--background-modifier-border);
-  border-radius: 3px;
-  overflow: hidden;
+	height: 6px;
+	background: var(--background-modifier-border);
+	border-radius: 3px;
+	overflow: hidden;
 }
 
 .im2tex-bar {
-  height: 100%;
-  width: 0%;
-  background: var(--interactive-accent);
-  border-radius: 3px;
-  transition: width 0.25s ease;
+	height: 100%;
+	width: 0%;
+	background: var(--interactive-accent);
+	border-radius: 3px;
+	transition: width 0.25s ease;
 }

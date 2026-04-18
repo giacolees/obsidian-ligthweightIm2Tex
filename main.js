@@ -37,43 +37,6 @@ __export(main_exports, {
 module.exports = __toCommonJS(main_exports);
 var import_obsidian4 = require("obsidian");
 
-// src/settings.ts
-var MODEL_ID = "alephpi/FormulaNet";
-var DEFAULT_SETTINGS = {
-  modelId: MODEL_ID
-};
-
-// src/view.ts
-var import_obsidian2 = require("obsidian");
-
-// src/modal.ts
-var import_obsidian = require("obsidian");
-var ModelDownloadModal = class extends import_obsidian.Modal {
-  constructor(app) {
-    super(app);
-    this.modalEl.addClass("im2tex-download-modal");
-  }
-  onOpen() {
-    const { contentEl } = this;
-    contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
-    contentEl.createEl("p", {
-      text: "This only happens once. The model (~100 MB) will be cached locally.",
-      cls: "im2tex-download-desc"
-    });
-    this.msgEl = contentEl.createEl("p", { text: "Starting\u2026", cls: "im2tex-download-msg" });
-    const wrap = contentEl.createDiv({ cls: "im2tex-bar-wrap" });
-    this.barEl = wrap.createDiv({ cls: "im2tex-bar" });
-  }
-  onClose() {
-    this.contentEl.empty();
-  }
-  update(msg, pct) {
-    this.msgEl.setText(msg);
-    if (pct !== void 0)
-      this.barEl.style.width = `${pct}%`;
-  }
-};
-
 // node_modules/@huggingface/transformers/node_modules/onnxruntime-common/dist/esm/index.js
 var esm_exports = {};
 __export(esm_exports, {
@@ -49047,15 +49010,31 @@ __webpack_exports__env.allowLocalModels = false;
 var _model = null;
 var _tokenizer = null;
 var _loadingPromise = null;
+var _loadedModelId = null;
+var _loadingModelId = null;
 function resetModel() {
   _model = null;
   _tokenizer = null;
   _loadingPromise = null;
+  _loadedModelId = null;
+  _loadingModelId = null;
 }
 async function ensureModel(modelId, onProgress) {
-  if (_model && _tokenizer)
+  if (_model && _tokenizer && _loadedModelId === modelId)
     return;
+  if (_loadingPromise && _loadingModelId !== modelId) {
+    try {
+      await _loadingPromise;
+    } catch {
+    }
+  }
+  if (_model && _tokenizer && _loadedModelId === modelId)
+    return;
+  if (_model && _tokenizer && _loadedModelId !== modelId) {
+    resetModel();
+  }
   if (!_loadingPromise) {
+    _loadingModelId = modelId;
     _loadingPromise = (async () => {
       const model = await __webpack_exports__VisionEncoderDecoderModel.from_pretrained(modelId, {
         dtype: "fp32",
@@ -49067,12 +49046,19 @@ async function ensureModel(modelId, onProgress) {
       const tokenizer = await __webpack_exports__PreTrainedTokenizer.from_pretrained(modelId);
       _model = model;
       _tokenizer = tokenizer;
+      _loadedModelId = modelId;
     })();
     _loadingPromise.catch(() => {
+      resetModel();
+    }).finally(() => {
       _loadingPromise = null;
+      _loadingModelId = null;
     });
   }
   await _loadingPromise;
+  if (!_model || !_tokenizer || _loadedModelId !== modelId) {
+    throw new Error(`Model "${modelId}" is not ready.`);
+  }
 }
 function isModelLoaded() {
   return !!(_model && _tokenizer);
@@ -49095,6 +49081,13 @@ function makeCanvas(w, h) {
   c.height = h;
   return c;
 }
+function get2dContext(canvas) {
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Could not get a 2D canvas context.");
+  }
+  return context;
+}
 async function preprocessDataUrl(dataUrl) {
   const img = await new Promise((res, rej) => {
     const i = new Image();
@@ -49104,7 +49097,7 @@ async function preprocessDataUrl(dataUrl) {
   });
   const w = img.width, h = img.height;
   const oc2 = makeCanvas(w, h);
-  const ctx = oc2.getContext("2d");
+  const ctx = get2dContext(oc2);
   ctx.fillStyle = "white";
   ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0);
@@ -49158,14 +49151,14 @@ async function preprocessDataUrl(dataUrl) {
     }
   }
   const cc2 = makeCanvas(cropW, cropH);
-  cc2.getContext("2d").putImageData(cropData, 0, 0);
+  get2dContext(cc2).putImageData(cropData, 0, 0);
   const scale = Math.min(TARGET_SIZE / cropW, TARGET_SIZE / cropH);
   const newW = Math.round(cropW * scale);
   const newH = Math.round(cropH * scale);
   const padX = Math.floor((TARGET_SIZE - newW) / 2);
   const padY = Math.floor((TARGET_SIZE - newH) / 2);
   const rc2 = makeCanvas(TARGET_SIZE, TARGET_SIZE);
-  const rctx = rc2.getContext("2d");
+  const rctx = get2dContext(rc2);
   rctx.fillStyle = "white";
   rctx.fillRect(0, 0, TARGET_SIZE, TARGET_SIZE);
   rctx.drawImage(cc2, padX, padY, newW, newH);
@@ -49177,10 +49170,13 @@ async function preprocessDataUrl(dataUrl) {
   return result;
 }
 async function runInference(dataUrl) {
+  if (!_model || !_tokenizer) {
+    throw new Error("Model is not loaded.");
+  }
   const array = await preprocessDataUrl(dataUrl);
   const t = new __webpack_exports__Tensor("float32", array, [1, 1, TARGET_SIZE, TARGET_SIZE]);
-  const pixel_values = __webpack_exports__cat([t, t, t], 1);
-  const outputs = await _model.generate({ inputs: pixel_values });
+  const pixelValues = __webpack_exports__cat([t, t, t], 1);
+  const outputs = await _model.generate({ inputs: pixelValues });
   const tok = _tokenizer;
   const raw = tok.batch_decode(outputs, {
     skip_special_tokens: true
@@ -49188,11 +49184,70 @@ async function runInference(dataUrl) {
   return raw.replace(/\\!/g, "");
 }
 
+// src/settings.ts
+var MODEL_ID = "alephpi/FormulaNet";
+var DEFAULT_SETTINGS = {
+  modelId: MODEL_ID
+};
+
+// src/settingsTab.ts
+var import_obsidian = require("obsidian");
+var Im2TexSettingTab = class extends import_obsidian.PluginSettingTab {
+  constructor(app, plugin) {
+    super(app, plugin);
+    this.plugin = plugin;
+  }
+  display() {
+    const { containerEl } = this;
+    containerEl.empty();
+    containerEl.createEl("h2", { text: "Im2Tex settings" });
+    new import_obsidian.Setting(containerEl).setName("Model ID").setDesc("HuggingFace model ID used for inference.").addText(
+      (t) => t.setPlaceholder(MODEL_ID).setValue(this.plugin.settings.modelId).onChange(async (v) => {
+        this.plugin.settings.modelId = v || MODEL_ID;
+        resetModel();
+        await this.plugin.saveSettings();
+      })
+    );
+  }
+};
+
+// src/view.ts
+var import_obsidian3 = require("obsidian");
+
+// src/modal.ts
+var import_obsidian2 = require("obsidian");
+var ModelDownloadModal = class extends import_obsidian2.Modal {
+  constructor(app) {
+    super(app);
+    this.modalEl.addClass("im2tex-download-modal");
+  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
+    contentEl.createEl("p", {
+      text: "This only happens once. The model (~100 MB) will be cached locally.",
+      cls: "im2tex-download-desc"
+    });
+    this.msgEl = contentEl.createEl("p", { text: "Starting\u2026", cls: "im2tex-download-msg" });
+    const wrap = contentEl.createDiv({ cls: "im2tex-bar-wrap" });
+    this.barEl = wrap.createDiv({ cls: "im2tex-bar" });
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+  update(msg, pct) {
+    this.msgEl.setText(msg);
+    if (pct !== void 0)
+      this.barEl.style.width = `${pct}%`;
+  }
+};
+
 // src/view.ts
 var VIEW_TYPE = "im2tex-sidebar";
-var Im2TexView = class extends import_obsidian2.ItemView {
+var Im2TexView = class extends import_obsidian3.ItemView {
   constructor(leaf, settings) {
     super(leaf);
+    this.resizeObserver = null;
     this.loadedImage = null;
     this.isDragging = false;
     this.startX = 0;
@@ -49211,22 +49266,29 @@ var Im2TexView = class extends import_obsidian2.ItemView {
     return "sigma";
   }
   async onOpen() {
+    await Promise.resolve();
     const root = this.containerEl.children[1];
     root.empty();
     root.addClass("im2tex-root");
-    this.buildUI(root);
+    this.buildUi(root);
   }
   async onClose() {
+    await Promise.resolve();
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
   }
   // ---------------------------------------------------------------------------
   // UI
   // ---------------------------------------------------------------------------
-  buildUI(root) {
+  buildUi(root) {
     const header = root.createDiv({ cls: "im2tex-header" });
     header.createEl("h4", { text: "Im2Tex" });
     this.statusEl = header.createEl("span", { cls: "im2tex-status" });
     this.dropZone = root.createDiv({ cls: "im2tex-dropzone" });
-    this.dropZone.createEl("p", { text: "Drop or paste an image here", cls: "im2tex-dropzone-hint" });
+    this.dropZone.createEl("p", {
+      text: "Drop or paste an image here",
+      cls: "im2tex-dropzone-hint"
+    });
     const browseBtn = this.dropZone.createEl("button", {
       text: "Browse file\u2026",
       cls: "im2tex-btn im2tex-btn--primary im2tex-browse-btn"
@@ -49256,11 +49318,13 @@ var Im2TexView = class extends import_obsidian2.ItemView {
       e.preventDefault();
       this.dropZone.removeClass("im2tex-dropzone--active");
       const file = e.dataTransfer?.files[0];
-      if (file && file.type.startsWith("image/"))
+      if (file?.type.startsWith("image/"))
         this.loadFile(file);
     });
     root.addEventListener("paste", (e) => {
-      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith("image/"));
+      const item = Array.from(e.clipboardData?.items ?? []).find(
+        (i) => i.type.startsWith("image/")
+      );
       if (item) {
         const f = item.getAsFile();
         if (f)
@@ -49273,6 +49337,12 @@ var Im2TexView = class extends import_obsidian2.ItemView {
     this.canvas = this.canvasContainer.createEl("canvas", { cls: "im2tex-canvas" });
     this.overlayCanvas = this.canvasContainer.createEl("canvas", { cls: "im2tex-overlay" });
     this.attachSelectionListeners();
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = new ResizeObserver(() => {
+      if (this.loadedImage)
+        this.renderImage();
+    });
+    this.resizeObserver.observe(this.canvasContainer);
     const btnRow = root.createDiv({ cls: "im2tex-btn-row" });
     this.inferBtn = btnRow.createEl("button", {
       text: "Detect formula",
@@ -49302,6 +49372,7 @@ var Im2TexView = class extends import_obsidian2.ItemView {
   }
   loadImageSrc(src) {
     const img = new Image();
+    img.decoding = "async";
     img.onload = () => {
       this.loadedImage = img;
       this.currentRect = null;
@@ -49310,6 +49381,11 @@ var Im2TexView = class extends import_obsidian2.ItemView {
       this.canvasContainer.style.display = "block";
       this.resultContainer.style.display = "none";
       this.setStatus("");
+    };
+    img.onerror = () => {
+      console.error("[Im2Tex] Failed to load image");
+      new import_obsidian3.Notice("Could not load that image.");
+      this.setStatus("Image load failed");
     };
     img.src = src;
   }
@@ -49324,72 +49400,80 @@ var Im2TexView = class extends import_obsidian2.ItemView {
       c.width = w;
       c.height = h;
     }
-    this.canvas.getContext("2d").drawImage(this.loadedImage, 0, 0, w, h);
+    this.get2dContext(this.canvas).drawImage(this.loadedImage, 0, 0, w, h);
     this.clearOverlay();
   }
   // ---------------------------------------------------------------------------
   // Rectangle selection
   // ---------------------------------------------------------------------------
   attachSelectionListeners() {
-    this.overlayCanvas.addEventListener("mousedown", (e) => {
+    this.overlayCanvas.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0)
+        return;
+      e.preventDefault();
+      this.overlayCanvas.setPointerCapture(e.pointerId);
       const { x, y } = this.canvasPos(e);
       this.isDragging = true;
       this.startX = x;
       this.startY = y;
       this.currentRect = null;
+      this.redrawOverlay();
     });
-    this.overlayCanvas.addEventListener("mousemove", (e) => {
+    this.overlayCanvas.addEventListener("pointermove", (e) => {
       if (!this.isDragging)
         return;
       const { x, y } = this.canvasPos(e);
       this.currentRect = this.normalizeRect(this.startX, this.startY, x, y);
       this.redrawOverlay();
     });
-    this.overlayCanvas.addEventListener("mouseup", (e) => {
+    const finishDrag = (e) => {
       if (!this.isDragging)
         return;
       this.isDragging = false;
+      if (this.overlayCanvas.hasPointerCapture(e.pointerId)) {
+        this.overlayCanvas.releasePointerCapture(e.pointerId);
+      }
       const { x, y } = this.canvasPos(e);
       this.currentRect = this.normalizeRect(this.startX, this.startY, x, y);
       this.redrawOverlay();
-    });
-    this.overlayCanvas.addEventListener("touchstart", (e) => {
-      e.preventDefault();
-      const { x, y } = this.canvasPos(e.touches[0]);
-      this.isDragging = true;
-      this.startX = x;
-      this.startY = y;
-    });
-    this.overlayCanvas.addEventListener("touchmove", (e) => {
-      e.preventDefault();
-      if (!this.isDragging)
-        return;
-      const { x, y } = this.canvasPos(e.touches[0]);
-      this.currentRect = this.normalizeRect(this.startX, this.startY, x, y);
-      this.redrawOverlay();
-    });
-    this.overlayCanvas.addEventListener("touchend", () => {
-      this.isDragging = false;
-    });
+    };
+    this.overlayCanvas.addEventListener("pointerup", finishDrag);
+    this.overlayCanvas.addEventListener("pointercancel", finishDrag);
   }
   canvasPos(e) {
     const r = this.overlayCanvas.getBoundingClientRect();
     return {
-      x: (e.clientX - r.left) * (this.overlayCanvas.width / r.width),
-      y: (e.clientY - r.top) * (this.overlayCanvas.height / r.height)
+      x: this.clamp(
+        (e.clientX - r.left) * (this.overlayCanvas.width / r.width),
+        0,
+        this.overlayCanvas.width
+      ),
+      y: this.clamp(
+        (e.clientY - r.top) * (this.overlayCanvas.height / r.height),
+        0,
+        this.overlayCanvas.height
+      )
     };
+  }
+  clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
   }
   normalizeRect(x1, y1, x2, y2) {
     return { x: Math.min(x1, x2), y: Math.min(y1, y2), w: Math.abs(x2 - x1), h: Math.abs(y2 - y1) };
   }
   clearOverlay() {
-    this.overlayCanvas.getContext("2d").clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+    this.get2dContext(this.overlayCanvas).clearRect(
+      0,
+      0,
+      this.overlayCanvas.width,
+      this.overlayCanvas.height
+    );
   }
   redrawOverlay() {
     this.clearOverlay();
     if (!this.currentRect || this.currentRect.w < 2 || this.currentRect.h < 2)
       return;
-    const ctx = this.overlayCanvas.getContext("2d");
+    const ctx = this.get2dContext(this.overlayCanvas);
     const { x, y, w, h } = this.currentRect;
     ctx.fillStyle = "rgba(0,0,0,0.45)";
     ctx.fillRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
@@ -49401,16 +49485,28 @@ var Im2TexView = class extends import_obsidian2.ItemView {
     ctx.setLineDash([]);
     ctx.fillStyle = "#7c6af7";
     const hs2 = 6;
-    for (const [cx, cy] of [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]) {
+    for (const [cx, cy] of [
+      [x, y],
+      [x + w, y],
+      [x, y + h],
+      [x + w, y + h]
+    ]) {
       ctx.fillRect(cx - hs2 / 2, cy - hs2 / 2, hs2, hs2);
     }
+  }
+  get2dContext(canvas) {
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Could not get a 2D canvas context.");
+    }
+    return context;
   }
   // ---------------------------------------------------------------------------
   // Inference
   // ---------------------------------------------------------------------------
   async handleInfer() {
     if (!this.loadedImage) {
-      new import_obsidian2.Notice("Please load an image first.");
+      new import_obsidian3.Notice("Please load an image first.");
       return;
     }
     if (this.busy)
@@ -49433,7 +49529,7 @@ var Im2TexView = class extends import_obsidian2.ItemView {
       modal?.close();
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[Im2Tex]", err);
-      new import_obsidian2.Notice(`Im2Tex error: ${msg}`);
+      new import_obsidian3.Notice(`Im2Tex error: ${msg}`);
       this.setStatus("Error");
     } finally {
       this.setBusy(false);
@@ -49441,17 +49537,20 @@ var Im2TexView = class extends import_obsidian2.ItemView {
   }
   getCropDataUrl() {
     const img = this.loadedImage;
+    if (!img) {
+      throw new Error("No image loaded.");
+    }
     const scaleX = img.naturalWidth / this.canvas.width;
     const scaleY = img.naturalHeight / this.canvas.height;
-    const hasRect = this.currentRect && this.currentRect.w >= 4 && this.currentRect.h >= 4;
-    const srcX = hasRect ? Math.round(this.currentRect.x * scaleX) : 0;
-    const srcY = hasRect ? Math.round(this.currentRect.y * scaleY) : 0;
-    const srcW = hasRect ? Math.round(this.currentRect.w * scaleX) : img.naturalWidth;
-    const srcH = hasRect ? Math.round(this.currentRect.h * scaleY) : img.naturalHeight;
+    const rect = this.currentRect && this.currentRect.w >= 4 && this.currentRect.h >= 4 ? this.currentRect : null;
+    const srcX = rect ? Math.round(rect.x * scaleX) : 0;
+    const srcY = rect ? Math.round(rect.y * scaleY) : 0;
+    const srcW = rect ? Math.round(rect.w * scaleX) : img.naturalWidth;
+    const srcH = rect ? Math.round(rect.h * scaleY) : img.naturalHeight;
     const off = document.createElement("canvas");
     off.width = srcW;
     off.height = srcH;
-    off.getContext("2d").drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
+    this.get2dContext(off).drawImage(img, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH);
     return off.toDataURL("image/png");
   }
   showResult(latex) {
@@ -49460,11 +49559,25 @@ var Im2TexView = class extends import_obsidian2.ItemView {
     this.resultContainer.scrollIntoView({ behavior: "smooth" });
   }
   copyLatex() {
-    navigator.clipboard.writeText(this.latexDisplay.getText()).then(() => new import_obsidian2.Notice("Copied!"));
+    const latex = this.latexDisplay.getText();
+    if (!latex) {
+      new import_obsidian3.Notice("No LaTeX formula to copy yet.");
+      return;
+    }
+    navigator.clipboard.writeText(latex).then(() => new import_obsidian3.Notice("Copied!")).catch((err) => {
+      console.error("[Im2Tex] Clipboard write failed", err);
+      new import_obsidian3.Notice("Could not copy to the clipboard.");
+    });
   }
   clearAll() {
     this.loadedImage = null;
     this.currentRect = null;
+    this.latexDisplay.empty();
+    this.clearOverlay();
+    this.canvas.width = 0;
+    this.canvas.height = 0;
+    this.overlayCanvas.width = 0;
+    this.overlayCanvas.height = 0;
     this.canvasContainer.style.display = "none";
     this.dropZone.style.display = "";
     this.resultContainer.style.display = "none";
@@ -49480,44 +49593,32 @@ var Im2TexView = class extends import_obsidian2.ItemView {
   }
 };
 
-// src/settingsTab.ts
-var import_obsidian3 = require("obsidian");
-var Im2TexSettingTab = class extends import_obsidian3.PluginSettingTab {
-  constructor(app, plugin) {
-    super(app, plugin);
-    this.plugin = plugin;
-  }
-  display() {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.createEl("h2", { text: "Im2Tex settings" });
-    new import_obsidian3.Setting(containerEl).setName("Model ID").setDesc("HuggingFace model ID used for inference.").addText(
-      (t) => t.setPlaceholder(MODEL_ID).setValue(this.plugin.settings.modelId).onChange(async (v) => {
-        this.plugin.settings.modelId = v || MODEL_ID;
-        resetModel();
-        await this.plugin.saveSettings();
-      })
-    );
-  }
-};
-
 // main.ts
 var Im2TexPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(VIEW_TYPE, (leaf) => new Im2TexView(leaf, this.settings));
     this.addRibbonIcon("sigma", "Open Im2Tex", () => this.activateView());
-    this.addCommand({ id: "open-im2tex", name: "Open Im2Tex sidebar", callback: () => this.activateView() });
+    this.addCommand({
+      id: "open-im2tex",
+      name: "Open Im2Tex sidebar",
+      callback: () => this.activateView()
+    });
     this.addSettingTab(new Im2TexSettingTab(this.app, this));
   }
   onunload() {
+    resetModel();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE);
   }
   async activateView() {
     const { workspace } = this.app;
     let leaf = workspace.getLeavesOfType(VIEW_TYPE)[0];
     if (!leaf) {
-      leaf = workspace.getRightLeaf(false);
+      const rightLeaf = workspace.getRightLeaf(false);
+      if (!rightLeaf) {
+        throw new Error("Could not open the Im2Tex sidebar.");
+      }
+      leaf = rightLeaf;
       await leaf.setViewState({ type: VIEW_TYPE, active: true });
     }
     workspace.revealLeaf(leaf);
