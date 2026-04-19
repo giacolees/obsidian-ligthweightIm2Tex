@@ -3,7 +3,7 @@ import { ensureModel, isModelLoaded, runInference } from "./inference";
 import { ModelDownloadModal } from "./modal";
 import type { Im2TexSettings } from "./settings";
 
-export const VIEW_TYPE = "im2tex-sidebar";
+export const VIEW_TYPE = "math-convert-sidebar";
 
 type Rect = { x: number; y: number; w: number; h: number };
 
@@ -36,7 +36,7 @@ export class Im2TexView extends ItemView {
 		return VIEW_TYPE;
 	}
 	getDisplayText() {
-		return "Im2Tex";
+		return "Math-Convert";
 	}
 	getIcon() {
 		return "sigma";
@@ -62,7 +62,7 @@ export class Im2TexView extends ItemView {
 
 	private buildUi(root: HTMLElement) {
 		const header = root.createDiv({ cls: "im2tex-header" });
-		header.createEl("h4", { text: "Im2Tex" });
+		header.createEl("h4", { text: "Math-Convert" });
 		this.statusEl = header.createEl("span", { cls: "im2tex-status" });
 
 		this.dropZone = root.createDiv({ cls: "im2tex-dropzone" });
@@ -327,8 +327,8 @@ export class Im2TexView extends ItemView {
 		} catch (err: unknown) {
 			modal?.close();
 			const msg = err instanceof Error ? err.message : String(err);
-			console.error("[Im2Tex]", err);
-			new Notice(`Im2Tex error: ${msg}`);
+			console.error("[Math-Convert]", err);
+			new Notice(`Math-Convert error: ${msg}`);
 			this.setStatus("Error");
 		} finally {
 			this.setBusy(false);

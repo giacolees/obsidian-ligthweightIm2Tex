@@ -11,7 +11,7 @@ export class ModelDownloadModal extends Modal {
 
 	onOpen() {
 		const { contentEl } = this;
-		contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
+		contentEl.createEl("h3", { text: "Downloading Math-Convert model" });
 		contentEl.createEl("p", {
 			text: "This only happens once. The model (~100 MB) will be cached locally.",
 			cls: "im2tex-download-desc",

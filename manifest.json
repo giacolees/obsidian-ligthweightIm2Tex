@@ -1,6 +1,6 @@
 {
-	"id": "lightweight-im2tex",
-	"name": "Lightweight Im2Tex",
+	"id": "math-convert",
+	"name": "Math-Convert: Local Image-to-LaTeX",
 	"version": "0.1.0",
 	"minAppVersion": "1.0.0",
 	"description": "Convert image regions to LaTeX formulas using AI inference.",

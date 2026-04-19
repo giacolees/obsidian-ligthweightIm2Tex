@@ -1,5 +1,5 @@
 {
-	"name": "lightweight-im2tex",
+	"name": "math-convert",
 	"version": "0.1.0",
 	"description": "Obsidian plugin: image region to LaTeX",
 	"main": "main.js",

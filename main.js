@@ -49038,6 +49038,7 @@ async function ensureModel(modelId, onProgress) {
     _loadingPromise = (async () => {
       const model = await __webpack_exports__VisionEncoderDecoderModel.from_pretrained(modelId, {
         dtype: "fp32",
+        // biome-ignore lint/style/useNamingConvention: HuggingFace API property name
         progress_callback: (info) => {
           const { msg, pct } = parseProgress(info);
           onProgress(msg, pct);
@@ -49179,6 +49180,7 @@ async function runInference(dataUrl) {
   const outputs = await _model.generate({ inputs: pixelValues });
   const tok = _tokenizer;
   const raw = tok.batch_decode(outputs, {
+    // biome-ignore lint/style/useNamingConvention: HuggingFace API property name
     skip_special_tokens: true
   })[0];
   return raw.replace(/\\!/g, "");
@@ -49200,7 +49202,7 @@ var Im2TexSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Im2Tex settings" });
+    containerEl.createEl("h2", { text: "Math-Convert settings" });
     new import_obsidian.Setting(containerEl).setName("Model ID").setDesc("HuggingFace model ID used for inference.").addText(
       (t) => t.setPlaceholder(MODEL_ID).setValue(this.plugin.settings.modelId).onChange(async (v) => {
         this.plugin.settings.modelId = v || MODEL_ID;
@@ -49223,7 +49225,7 @@ var ModelDownloadModal = class extends import_obsidian2.Modal {
   }
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h3", { text: "Downloading Im2Tex model" });
+    contentEl.createEl("h3", { text: "Downloading Math-Convert model" });
     contentEl.createEl("p", {
       text: "This only happens once. The model (~100 MB) will be cached locally.",
       cls: "im2tex-download-desc"
@@ -49243,7 +49245,7 @@ var ModelDownloadModal = class extends import_obsidian2.Modal {
 };
 
 // src/view.ts
-var VIEW_TYPE = "im2tex-sidebar";
+var VIEW_TYPE = "math-convert-sidebar";
 var Im2TexView = class extends import_obsidian3.ItemView {
   constructor(leaf, settings) {
     super(leaf);
@@ -49260,7 +49262,7 @@ var Im2TexView = class extends import_obsidian3.ItemView {
     return VIEW_TYPE;
   }
   getDisplayText() {
-    return "Im2Tex";
+    return "Math-Convert";
   }
   getIcon() {
     return "sigma";
@@ -49282,7 +49284,7 @@ var Im2TexView = class extends import_obsidian3.ItemView {
   // ---------------------------------------------------------------------------
   buildUi(root) {
     const header = root.createDiv({ cls: "im2tex-header" });
-    header.createEl("h4", { text: "Im2Tex" });
+    header.createEl("h4", { text: "Math-Convert" });
     this.statusEl = header.createEl("span", { cls: "im2tex-status" });
     this.dropZone = root.createDiv({ cls: "im2tex-dropzone" });
     this.dropZone.createEl("p", {
@@ -49528,8 +49530,8 @@ var Im2TexView = class extends import_obsidian3.ItemView {
     } catch (err) {
       modal?.close();
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[Im2Tex]", err);
-      new import_obsidian3.Notice(`Im2Tex error: ${msg}`);
+      console.error("[Math-Convert]", err);
+      new import_obsidian3.Notice(`Math-Convert error: ${msg}`);
       this.setStatus("Error");
     } finally {
       this.setBusy(false);
@@ -49598,10 +49600,10 @@ var Im2TexPlugin = class extends import_obsidian4.Plugin {
   async onload() {
     await this.loadSettings();
     this.registerView(VIEW_TYPE, (leaf) => new Im2TexView(leaf, this.settings));
-    this.addRibbonIcon("sigma", "Open Im2Tex", () => this.activateView());
+    this.addRibbonIcon("sigma", "Open Math-Convert", () => this.activateView());
     this.addCommand({
-      id: "open-im2tex",
-      name: "Open Im2Tex sidebar",
+      id: "open-math-convert",
+      name: "Open Math-Convert sidebar",
       callback: () => this.activateView()
     });
     this.addSettingTab(new Im2TexSettingTab(this.app, this));
@@ -49616,7 +49618,7 @@ var Im2TexPlugin = class extends import_obsidian4.Plugin {
     if (!leaf) {
       const rightLeaf = workspace.getRightLeaf(false);
       if (!rightLeaf) {
-        throw new Error("Could not open the Im2Tex sidebar.");
+        throw new Error("Could not open the Math-Convert sidebar.");
       }
       leaf = rightLeaf;
       await leaf.setViewState({ type: VIEW_TYPE, active: true });

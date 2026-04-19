@@ -1,25 +1,45 @@
-# Lightweight Im2Tex
+# Math-Convert: Local Image-to-LaTeX
 
-An Obsidian plugin that converts images of mathematical formulas into LaTeX — entirely on-device, no API key or internet connection required after the first run.
+**Snap a photo of any equation. Get clean LaTeX. Never leave Obsidian.**
+
+Math-Convert runs a full AI model directly on your machine — no cloud, no subscription, no data leaving your device. Photograph a textbook, screenshot a paper, or paste from your clipboard, and within seconds you have publication-ready LaTeX to drop straight into your notes.
+
+---
+
+## Why Math-Convert?
+
+Retyping equations is tedious and error-prone. Online converters are slow, require accounts, and send your work to someone else's server. Math-Convert is different:
+
+- **Fully offline after the first download** — the model runs locally via WebAssembly
+- **Privacy-first** — your images never leave your machine
+- **Zero friction** — lives right inside Obsidian, no tab-switching required
+- **Instant on repeat use** — the model is cached after the first run (~100 MB, one-time)
+
+---
 
 ## How it works
 
-The plugin runs [FormulaNet](https://huggingface.co/alephpi/FormulaNet) (a 20 M-parameter VisionEncoderDecoder model) locally via WebAssembly using `@huggingface/transformers`. The model is downloaded from Hugging Face on first use (~100 MB) and cached automatically.
+Math-Convert embeds [FormulaNet](https://huggingface.co/alephpi/FormulaNet), a 20 M-parameter vision-to-sequence model, and runs it locally using `@huggingface/transformers` over WebAssembly. The model is fetched from Hugging Face on first use and cached automatically — every subsequent conversion is instant and requires no internet connection.
+
+---
 
 ## Usage
 
-1. Open the **Im2Tex** sidebar (ribbon icon or command palette → *Open Im2Tex sidebar*).
-2. Load an image by dragging it into the drop zone, clicking **Browse**, or pasting from the clipboard.
-3. Draw a rectangle over the formula you want to convert. If you skip this step the full image is used.
-4. Click **Detect formula**.
-   - On the first run a progress bar shows the model downloading. Subsequent runs are instant.
-5. Copy the result with the **Copy** button or paste it directly into your note.
+1. **Open the sidebar** — click the ribbon icon or run *Open Math-Convert sidebar* from the command palette.
+2. **Load an image** — drag and drop, click **Browse**, or paste directly from your clipboard.
+3. **Select your formula** — draw a rectangle around the region you care about. Skip this to convert the whole image.
+4. **Click Detect formula** — the first run downloads the model with a progress bar; after that it's instant.
+5. **Use your LaTeX** — hit **Copy** and paste it anywhere in your vault.
+
+---
 
 ## Settings
 
 | Setting | Default | Description |
-|---------|---------|-------------|
-| Model ID | `alephpi/FormulaNet` | Hugging Face model ID. Change only if you want to test a different compatible checkpoint. |
+|---|---|---|
+| Model ID | `alephpi/FormulaNet` | Hugging Face model ID. Swap in any compatible VisionEncoderDecoder checkpoint to experiment with alternative models. |
+
+---
 
 ## Installation
 
@@ -32,7 +52,9 @@ npm install
 npm run build
 ```
 
-Copy (or symlink) the folder into your vault's `.obsidian/plugins/lightweight-im2tex/`, then enable the plugin in **Settings → Community plugins**.
+Copy (or symlink) the repo folder into your vault's `.obsidian/plugins/math-convert/`, then enable it under **Settings → Community plugins**.
+
+---
 
 ## Development
 
@@ -42,6 +64,8 @@ npm run build # type-check + production build
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture notes.
+
+---
 
 ## License
 

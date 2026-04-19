@@ -16,7 +16,7 @@ export class Im2TexSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl("h2", { text: "Im2Tex settings" });
+		containerEl.createEl("h2", { text: "Math-Convert settings" });
 
 		new Setting(containerEl)
 			.setName("Model ID")

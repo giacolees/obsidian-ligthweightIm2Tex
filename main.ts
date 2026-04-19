@@ -10,10 +10,10 @@ export default class Im2TexPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.registerView(VIEW_TYPE, (leaf) => new Im2TexView(leaf, this.settings));
-		this.addRibbonIcon("sigma", "Open Im2Tex", () => this.activateView());
+		this.addRibbonIcon("sigma", "Open Math-Convert", () => this.activateView());
 		this.addCommand({
-			id: "open-im2tex",
-			name: "Open Im2Tex sidebar",
+			id: "open-math-convert",
+			name: "Open Math-Convert sidebar",
 			callback: () => this.activateView(),
 		});
 		this.addSettingTab(new Im2TexSettingTab(this.app, this));
@@ -30,7 +30,7 @@ export default class Im2TexPlugin extends Plugin {
 		if (!leaf) {
 			const rightLeaf = workspace.getRightLeaf(false);
 			if (!rightLeaf) {
-				throw new Error("Could not open the Im2Tex sidebar.");
+				throw new Error("Could not open the Math-Convert sidebar.");
 			}
 			leaf = rightLeaf;
 			await leaf.setViewState({ type: VIEW_TYPE, active: true });
