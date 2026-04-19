@@ -1,4 +1,4 @@
-import { ItemView, MarkdownView, Notice, type Editor, type WorkspaceLeaf } from "obsidian";
+import { type Editor, ItemView, MarkdownView, Notice, type WorkspaceLeaf } from "obsidian";
 import { ensureModel, isModelLoaded, runInference } from "./inference";
 import { ModelDownloadModal } from "./modal";
 import type { Im2TexSettings } from "./settings";
