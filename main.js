@@ -49256,6 +49256,7 @@ var Im2TexView = class extends import_obsidian3.ItemView {
     this.startY = 0;
     this.currentRect = null;
     this.busy = false;
+    this.lastEditor = null;
     this.settings = settings;
   }
   getViewType() {
@@ -49273,6 +49274,13 @@ var Im2TexView = class extends import_obsidian3.ItemView {
     root.empty();
     root.addClass("im2tex-root");
     this.buildUi(root);
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
+        if (view)
+          this.lastEditor = view.editor;
+      })
+    );
   }
   async onClose() {
     await Promise.resolve();
@@ -49357,11 +49365,17 @@ var Im2TexView = class extends import_obsidian3.ItemView {
     this.resultContainer.style.display = "none";
     const resultHeader = this.resultContainer.createDiv({ cls: "im2tex-result-header" });
     resultHeader.createEl("span", { text: "LaTeX formula" });
-    const copyBtn = resultHeader.createEl("button", {
+    const actions = resultHeader.createDiv({ cls: "im2tex-result-actions" });
+    const copyBtn = actions.createEl("button", {
       text: "Copy",
       cls: "im2tex-btn im2tex-btn--sm im2tex-btn--primary"
     });
     copyBtn.addEventListener("click", () => this.copyLatex());
+    const insertBtn = actions.createEl("button", {
+      text: "Insert",
+      cls: "im2tex-btn im2tex-btn--sm im2tex-btn--primary"
+    });
+    insertBtn.addEventListener("click", () => this.insertLatex());
     this.latexDisplay = this.resultContainer.createDiv({ cls: "im2tex-latex-display" });
   }
   // ---------------------------------------------------------------------------
@@ -49570,6 +49584,19 @@ var Im2TexView = class extends import_obsidian3.ItemView {
       console.error("[Im2Tex] Clipboard write failed", err);
       new import_obsidian3.Notice("Could not copy to the clipboard.");
     });
+  }
+  insertLatex() {
+    const latex = this.latexDisplay.getText();
+    if (!latex) {
+      new import_obsidian3.Notice("No LaTeX formula to insert yet.");
+      return;
+    }
+    const editor = this.app.workspace.activeEditor?.editor ?? this.lastEditor;
+    if (!editor) {
+      new import_obsidian3.Notice("No active editor \u2014 click into a note first.");
+      return;
+    }
+    editor.replaceSelection(`$${latex}$`);
   }
   clearAll() {
     this.loadedImage = null;

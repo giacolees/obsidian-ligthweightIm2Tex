@@ -1,4 +1,4 @@
-import { ItemView, Notice, type WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownView, Notice, type Editor, type WorkspaceLeaf } from "obsidian";
 import { ensureModel, isModelLoaded, runInference } from "./inference";
 import { ModelDownloadModal } from "./modal";
 import type { Im2TexSettings } from "./settings";
@@ -26,6 +26,7 @@ export class Im2TexView extends ItemView {
 	private startY = 0;
 	private currentRect: Rect | null = null;
 	private busy = false;
+	private lastEditor: Editor | null = null;
 
 	constructor(leaf: WorkspaceLeaf, settings: Im2TexSettings) {
 		super(leaf);
@@ -48,6 +49,12 @@ export class Im2TexView extends ItemView {
 		root.empty();
 		root.addClass("im2tex-root");
 		this.buildUi(root);
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", () => {
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (view) this.lastEditor = view.editor;
+			}),
+		);
 	}
 
 	async onClose() {
@@ -139,11 +146,17 @@ export class Im2TexView extends ItemView {
 
 		const resultHeader = this.resultContainer.createDiv({ cls: "im2tex-result-header" });
 		resultHeader.createEl("span", { text: "LaTeX formula" });
-		const copyBtn = resultHeader.createEl("button", {
+		const actions = resultHeader.createDiv({ cls: "im2tex-result-actions" });
+		const copyBtn = actions.createEl("button", {
 			text: "Copy",
 			cls: "im2tex-btn im2tex-btn--sm im2tex-btn--primary",
 		});
 		copyBtn.addEventListener("click", () => this.copyLatex());
+		const insertBtn = actions.createEl("button", {
+			text: "Insert",
+			cls: "im2tex-btn im2tex-btn--sm im2tex-btn--primary",
+		});
+		insertBtn.addEventListener("click", () => this.insertLatex());
 		this.latexDisplay = this.resultContainer.createDiv({ cls: "im2tex-latex-display" });
 	}
 
@@ -379,6 +392,20 @@ export class Im2TexView extends ItemView {
 				console.error("[Im2Tex] Clipboard write failed", err);
 				new Notice("Could not copy to the clipboard.");
 			});
+	}
+
+	private insertLatex() {
+		const latex = this.latexDisplay.getText();
+		if (!latex) {
+			new Notice("No LaTeX formula to insert yet.");
+			return;
+		}
+		const editor = this.app.workspace.activeEditor?.editor ?? this.lastEditor;
+		if (!editor) {
+			new Notice("No active editor — click into a note first.");
+			return;
+		}
+		editor.replaceSelection(`$${latex}$`);
 	}
 
 	private clearAll() {
