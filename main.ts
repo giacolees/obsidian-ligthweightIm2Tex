@@ -10,10 +10,10 @@ export default class Im2TexPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 		this.registerView(VIEW_TYPE, (leaf) => new Im2TexView(leaf, this.settings));
-		this.addRibbonIcon("sigma", "Open Math-Convert", () => this.activateView());
+		this.addRibbonIcon("sigma", "Open math-convert", () => this.activateView());
 		this.addCommand({
-			id: "open-math-convert",
-			name: "Open Math-Convert sidebar",
+			id: "open",
+			name: "Open math-convert sidebar",
 			callback: () => this.activateView(),
 		});
 		this.addSettingTab(new Im2TexSettingTab(this.app, this));
@@ -21,7 +21,7 @@ export default class Im2TexPlugin extends Plugin {
 
 	onunload() {
 		resetModel();
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE);
+		
 	}
 
 	async activateView() {
@@ -35,11 +35,11 @@ export default class Im2TexPlugin extends Plugin {
 			leaf = rightLeaf;
 			await leaf.setViewState({ type: VIEW_TYPE, active: true });
 		}
-		workspace.revealLeaf(leaf);
+		void workspace.revealLeaf(leaf);
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<Im2TexSettings>);
 	}
 	async saveSettings() {
 		await this.saveData(this.settings);

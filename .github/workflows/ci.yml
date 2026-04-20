@@ -25,6 +25,9 @@ jobs:
       - name: Build
         run: node esbuild.config.mjs production
 
+      - name: Lint
+        run: npm run lint
+
       - name: Verify ONNX patch was applied
         run: grep -q 'if (Aa)' main.js || (echo "::error::ONNX inline-WASM patch not found in main.js — esbuild post-patch failed" && exit 1)
 

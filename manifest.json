@@ -2,7 +2,7 @@
 	"id": "math-convert",
 	"name": "Math-Convert: Local Image-to-LaTeX",
 	"version": "0.1.0",
-	"minAppVersion": "1.0.0",
+	"minAppVersion": "1.7.2",
 	"description": "Convert image regions to LaTeX formulas with local, offline AI inference.",
 	"author": "giacomolisita",
 	"authorUrl": "https://github.com/giacolees",
