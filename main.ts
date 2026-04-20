@@ -21,7 +21,6 @@ export default class Im2TexPlugin extends Plugin {
 
 	onunload() {
 		resetModel();
-		
 	}
 
 	async activateView() {
@@ -39,7 +38,11 @@ export default class Im2TexPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<Im2TexSettings>);
+		this.settings = Object.assign(
+			{},
+			DEFAULT_SETTINGS,
+			(await this.loadData()) as Partial<Im2TexSettings>,
+		);
 	}
 	async saveSettings() {
 		await this.saveData(this.settings);
