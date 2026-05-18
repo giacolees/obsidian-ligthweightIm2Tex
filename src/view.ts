@@ -1,7 +1,7 @@
 import { type Editor, ItemView, MarkdownView, Notice, type WorkspaceLeaf } from "obsidian";
 import { ensureModel, isModelLoaded, runInference } from "./inference";
 import { ModelDownloadModal } from "./modal";
-import type { MathConvertSettings } from "./settings";
+import { applyPostProcessing, type MathConvertSettings } from "./settings";
 
 export const VIEW_TYPE = "math-convert-sidebar";
 
@@ -334,7 +334,7 @@ export class MathConvertView extends ItemView {
 
 			this.setStatus("Preprocessing…");
 			const latex = await runInference(this.getCropDataUrl());
-			this.showResult(latex);
+			this.showResult(applyPostProcessing(latex, this.settings.replacementRules));
 			this.setStatus("Done");
 		} catch (err: unknown) {
 			modal?.close();
