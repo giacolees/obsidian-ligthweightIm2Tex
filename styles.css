@@ -186,6 +186,59 @@
 	background: var(--background-primary-alt);
 }
 
+/* --- Post-Processing Rules table --- */
+.math-convert-rules-container {
+	margin-bottom: 8px;
+}
+
+.math-convert-rules-empty {
+	color: var(--text-muted);
+	font-size: 0.85rem;
+	font-style: italic;
+	margin: 0 0 8px;
+}
+
+.math-convert-rules-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.85rem;
+}
+
+.math-convert-rules-table th {
+	text-align: left;
+	padding: 4px 8px;
+	color: var(--text-muted);
+	font-weight: 600;
+	border-bottom: 1px solid var(--background-modifier-border);
+	white-space: nowrap;
+}
+
+.math-convert-rules-table td {
+	padding: 4px 6px;
+	vertical-align: middle;
+}
+
+.math-convert-rules-cell--center {
+	text-align: center;
+}
+
+.math-convert-rules-input {
+	width: 100%;
+	font-family: var(--font-monospace);
+	font-size: 0.83rem;
+	padding: 3px 6px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	box-sizing: border-box;
+}
+
+.math-convert-rules-input:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+}
+
 /* --- Download modal --- */
 .math-convert-download-modal .modal-content {
 	display: flex;

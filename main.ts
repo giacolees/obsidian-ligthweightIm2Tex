@@ -1,6 +1,6 @@
 import { Plugin } from "obsidian";
 import { resetModel } from "./src/inference";
-import { DEFAULT_SETTINGS, type MathConvertSettings } from "./src/settings";
+import { DEFAULT_RULES, DEFAULT_SETTINGS, type MathConvertSettings } from "./src/settings";
 import { MathConvertSettingTab } from "./src/settingsTab";
 import { MathConvertView, VIEW_TYPE } from "./src/view";
 
@@ -38,11 +38,11 @@ export default class MathConvertPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign(
-			{} as MathConvertSettings,
-			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<MathConvertSettings>,
-		);
+		const saved = (await this.loadData()) as Partial<MathConvertSettings> | null;
+		this.settings = Object.assign({} as MathConvertSettings, DEFAULT_SETTINGS, saved);
+		if (!saved?.replacementRules) {
+			this.settings.replacementRules = DEFAULT_RULES.map((r) => ({ ...r }));
+		}
 	}
 	async saveSettings() {
 		await this.saveData(this.settings);
