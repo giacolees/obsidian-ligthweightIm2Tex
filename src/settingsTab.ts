@@ -32,7 +32,7 @@ export class MathConvertSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		new Setting(containerEl).setName("Post-Processing Rules").setHeading();
+		new Setting(containerEl).setName("Post-processing rules").setHeading();
 
 		containerEl.createEl("p", {
 			text: "Define rules to automatically modify the output LaTeX before it is inserted or copied. Rules are applied in order from top to bottom.",
@@ -43,15 +43,14 @@ export class MathConvertSettingTab extends PluginSettingTab {
 		this.renderRules(rulesContainer);
 
 		new Setting(containerEl).addButton((btn) =>
-			btn.setButtonText("Add Rule").onClick(async () => {
+			btn.setButtonText("Add rule").onClick(() => {
 				this.plugin.settings.replacementRules.push({
 					find: "",
 					replace: "",
 					isRegex: false,
 					enabled: true,
 				});
-				await this.plugin.saveSettings();
-				this.display();
+				void this.plugin.saveSettings().then(() => this.display());
 			}),
 		);
 	}
@@ -62,7 +61,7 @@ export class MathConvertSettingTab extends PluginSettingTab {
 
 		if (replacementRules.length === 0) {
 			container.createEl("p", {
-				text: "No rules defined. Click 'Add Rule' to create one.",
+				text: "No rules defined. Click 'add rule' to create one.",
 				cls: "math-convert-rules-empty",
 			});
 			return;
@@ -95,9 +94,9 @@ export class MathConvertSettingTab extends PluginSettingTab {
 		findInput.addClass("math-convert-rules-input");
 		findInput.value = rule.find;
 		findInput.placeholder = "Find…";
-		findInput.addEventListener("change", async () => {
+		findInput.addEventListener("change", () => {
 			rule.find = findInput.value;
-			await this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 
 		const replaceTd = tr.createEl("td");
@@ -106,9 +105,9 @@ export class MathConvertSettingTab extends PluginSettingTab {
 		replaceInput.addClass("math-convert-rules-input");
 		replaceInput.value = rule.replace;
 		replaceInput.placeholder = "Replace with…";
-		replaceInput.addEventListener("change", async () => {
+		replaceInput.addEventListener("change", () => {
 			rule.replace = replaceInput.value;
-			await this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 
 		const regexTd = tr.createEl("td");
@@ -116,10 +115,10 @@ export class MathConvertSettingTab extends PluginSettingTab {
 		const regexCb = regexTd.createEl("input");
 		regexCb.type = "checkbox";
 		regexCb.checked = rule.isRegex;
-		regexCb.title = "Treat 'Find' as a regular expression";
-		regexCb.addEventListener("change", async () => {
+		regexCb.title = "Treat 'find' as a regular expression";
+		regexCb.addEventListener("change", () => {
 			rule.isRegex = regexCb.checked;
-			await this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 
 		const enabledTd = tr.createEl("td");
@@ -128,9 +127,9 @@ export class MathConvertSettingTab extends PluginSettingTab {
 		enabledCb.type = "checkbox";
 		enabledCb.checked = rule.enabled;
 		enabledCb.title = "Enable this rule";
-		enabledCb.addEventListener("change", async () => {
+		enabledCb.addEventListener("change", () => {
 			rule.enabled = enabledCb.checked;
-			await this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 
 		const actionsTd = tr.createEl("td");
@@ -138,10 +137,9 @@ export class MathConvertSettingTab extends PluginSettingTab {
 			text: "Delete",
 			cls: "math-convert-btn math-convert-btn--sm",
 		});
-		deleteBtn.addEventListener("click", async () => {
+		deleteBtn.addEventListener("click", () => {
 			rules.splice(index, 1);
-			await this.plugin.saveSettings();
-			this.display();
+			void this.plugin.saveSettings().then(() => this.display());
 		});
 	}
 }
