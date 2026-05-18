@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import process from "node:process";
-import builtins from "builtin-modules";
+import { builtinModules as builtins } from "node:module";
 import esbuild from "esbuild";
 
 const banner = `/*
@@ -27,8 +27,8 @@ const patchOnnxPlugin = {
 		build.onEnd(() => {
 			const path = build.initialOptions.outfile;
 			const src = fs.readFileSync(path, "utf8");
-			const before = "if (!e && !t && Aa && Ue && Ln(Ue))";
-			const after = "if (Aa)";
+			const before = "if(!e&&!t&&Zr&&be&&Tn(be))";
+			const after = "if(Zr)";
 			if (!src.includes(before)) {
 				console.warn(
 					"[patch-onnx] guard string not found — skipping (bundle format may have changed)",
@@ -36,7 +36,6 @@ const patchOnnxPlugin = {
 				return;
 			}
 			fs.writeFileSync(path, src.replace(before, after));
-			console.info("[patch-onnx] patched Oa() → inline WASM factory always used");
 		});
 	},
 };
