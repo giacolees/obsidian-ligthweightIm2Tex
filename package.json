@@ -1,6 +1,6 @@
 {
 	"name": "math-convert",
-	"version": "0.3.0",
+	"version": "0.3.1",
 	"description": "Obsidian plugin: image region to LaTeX",
 	"main": "main.js",
 	"scripts": {
